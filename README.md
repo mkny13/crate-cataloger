@@ -1,5 +1,7 @@
 # crate.py: type titles, fill your Discogs collection
 
+Commands: `setup`, `quick`, `match`, `add`, `undo`, `serve`, `dupes`. Run `python3 crate.py -h` for usage.
+
 Plain Python 3, no packages to install, no LLM. Matches each "Artist - Title" against
 Discogs and adds the **main release** of the master (you said exact pressing doesn't matter).
 

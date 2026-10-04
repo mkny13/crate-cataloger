@@ -10,7 +10,8 @@ Commands
   match LIST.txt        batch: match every line, write LIST.review.csv for you to check
   add REVIEW.csv        add every row that has something in the "pick" column
   undo LOG.csv          remove everything a previous quick/add run added
-  serve                 web UI for quick mode, reachable from a phone on your LAN
+  serve                 web UI for quick mode, reachable from a phone on your LAN (key-protected)
+  dupes                 list albums you own more than once, write dupes-<timestamp>.csv
 
 Input lines look like "Artist - Title" (any dash works). A bare title also
 works, but it's less accurate. Blank lines and lines starting with # are skipped.
@@ -746,7 +747,11 @@ def main():
     m = sub.add_parser("match"); m.add_argument("list"); m.set_defaults(fn=cmd_match)
     a = sub.add_parser("add"); a.add_argument("review"); a.add_argument("--folder", type=int, default=DEFAULT_FOLDER)
     a.add_argument("-y", "--yes", action="store_true"); a.set_defaults(fn=cmd_add)
-    sv = sub.add_parser("serve"); sv.add_argument("--port", type=int, default=8765); sv.add_argument("--host", default="0.0.0.0", help="bind address (127.0.0.1 = this computer only)"); sv.add_argument("--folder", type=int, default=DEFAULT_FOLDER); sv.set_defaults(fn=cmd_serve)
+    sv = sub.add_parser("serve")
+    sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--host", default="0.0.0.0", help="bind address (127.0.0.1 = this computer only)")
+    sv.add_argument("--folder", type=int, default=DEFAULT_FOLDER)
+    sv.set_defaults(fn=cmd_serve)
     sub.add_parser("dupes").set_defaults(fn=cmd_dupes)
     u = sub.add_parser("undo"); u.add_argument("log"); u.set_defaults(fn=cmd_undo)
     args = ap.parse_args()

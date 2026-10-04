@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+# run output: lists your personal collection
+added-*.csv
+dupes-*.csv
+*.review.csv
+# never commit credentials
+.env
+token
+*.pem

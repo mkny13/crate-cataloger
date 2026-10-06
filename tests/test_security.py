@@ -65,6 +65,17 @@ class IdValidation(unittest.TestCase):
                 self.dc.add(*args)
         self.assertEqual(self.calls, [])
 
+    def test_rejects_non_canonical_digits(self):
+        for bad in ("1_0", "+5", "１２", "1 0", "0x10"):
+            with self.assertRaises(ValueError):
+                self.dc.add(bad, "1")
+            with self.assertRaises(ValueError):
+                self.dc.add("123", bad)
+            for args in ((bad, "1", "4"), ("1", bad, "4"), ("1", "1", bad)):
+                with self.assertRaises(ValueError):
+                    self.dc.remove(*args)
+        self.assertEqual(self.calls, [])
+
     def test_remove_accepts(self):
         self.dc.remove("123", "1", "456")
         self.assertEqual(self.calls, [("DELETE", "/users/u/collection/folders/1/releases/123/instances/456")])

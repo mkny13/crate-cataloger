@@ -61,10 +61,11 @@ _opener = urllib.request.build_opener(_NoRedirect)
 
 def _id(value, name, minimum=1):
     """Ids go into URL paths, so only plain integers (>= minimum) may through."""
-    try:
-        n = int(str(value).strip())
-    except ValueError:
+    text = str(value).strip()
+    # int() would also take "1_0", "+5" and non-ASCII digits, so check the shape first.
+    if not (text.isascii() and text.isdigit()):
         raise ValueError(f"{name} must be a whole number, got {value!r}")
+    n = int(text)
     if n < minimum:
         raise ValueError(f"{name} must be >= {minimum}, got {n}")
     return n

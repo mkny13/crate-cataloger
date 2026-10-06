@@ -19,6 +19,7 @@ uses a plain `urlopen` with no token. Every outbound host is hardcoded (`api.dis
 `itunes.apple.com`); no user input changes the host. Test: `NoRedirect`.
 
 ## 3. Subprocess / shell execution — n/a
+The scoped application is the single module `crate.py:1`.
 `grep -nE "subprocess|os\.system|os\.popen|eval\(|exec\(" crate.py` returns nothing. The app never
 spawns a process, so there are no arguments to sanitize.
 
@@ -51,12 +52,15 @@ Discogs-supplied or user-typed cell written to CSV: `AddLog.write` (`crate.py:37
 `CsvSafe`.
 
 ## 7. Personal data in output files — OK
-`added-*.csv`, `dupes-*.csv` and `*.review.csv` hold your collection and are git-ignored.
+`added-*.csv`, `dupes-*.csv` and `*.review.csv` hold your collection and are git-ignored. They are
+created by `AddLog` (`crate.py:361`), `cmd_match` (`crate.py:633`) and `cmd_dupes`
+(`crate.py:735`).
 
 ## 8. Dependency scan — n/a
 Stdlib only; there is no `requirements.txt` or `pyproject.toml`, so nothing to scan. Needs Python 3.8+
-(see the `crate.py` docstring).
+(see the `crate.py` docstring, `crate.py:5`).
 
 ## 9. Denial lists / permission boundaries — n/a
-There is no deny-list or role system. The boundaries that exist are the `serve` key and the Host
-check (item 4), plus the token's own Discogs permissions.
+There is no deny-list or role system. The boundaries that exist are the `serve` key
+(`crate.py:13`) and the Host check (`host_ok`, `crate.py:524-527`; item 4), plus the token's own
+Discogs permissions.

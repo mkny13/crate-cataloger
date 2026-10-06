@@ -59,6 +59,17 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_NoRedirect)
 
 
+def _id(value, name, minimum=1):
+    """Ids go into URL paths, so only plain integers (>= minimum) may through."""
+    try:
+        n = int(str(value).strip())
+    except ValueError:
+        raise ValueError(f"{name} must be a whole number, got {value!r}")
+    if n < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {n}")
+    return n
+
+
 class Discogs:
     def __init__(self, token):
         self.token = token
@@ -156,10 +167,13 @@ class Discogs:
         return items
 
     def add(self, release_id, folder):
+        release_id, folder = _id(release_id, "release_id"), _id(folder, "folder", minimum=1)
         res = self.call("POST", f"/users/{self.username}/collection/folders/{folder}/releases/{release_id}")
         return (res or {}).get("instance_id")
 
     def remove(self, release_id, folder, instance_id):
+        release_id, instance_id = _id(release_id, "release_id"), _id(instance_id, "instance_id")
+        folder = _id(folder, "folder", minimum=0)
         self.call("DELETE", f"/users/{self.username}/collection/folders/{folder}"
                             f"/releases/{release_id}/instances/{instance_id}")
 
@@ -507,6 +521,12 @@ def lan_ip():
         return "127.0.0.1"
 
 
+def host_ok(host, ip, port):
+    # Reject DNS-rebinding: only accept the Host header values we told the user to open.
+    name = (host or "").rsplit(":", 1)[0].strip("[]")
+    return name in ("localhost", "127.0.0.1", ip) and (host or "").rsplit(":", 1)[-1] == str(port)
+
+
 def cmd_serve(args):
     dc = client()
     print(f"Discogs user: {dc.username}. Loading collection for duplicate checks...")
@@ -515,11 +535,6 @@ def cmd_serve(args):
     added = {}  # instance_id -> (release_id, master_id), for the phone's Undo button
     lock = threading.Lock()  # one Discogs call sequence at a time keeps rate-limit pacing sane
     key = secrets.token_urlsafe(16)  # per-run secret; the URL fragment carries it, so it never hits logs
-
-    def host_ok(host):
-        # Reject DNS-rebinding: only accept the Host header values we told the user to open.
-        name = (host or "").rsplit(":", 1)[0].strip("[]")
-        return name in ("localhost", "127.0.0.1", ip) and (host or "").rsplit(":", 1)[-1] == str(args.port)
 
     ip = lan_ip()
 
@@ -539,13 +554,13 @@ def cmd_serve(args):
             self.wfile.write(data)
 
         def _authed(self):
-            return host_ok(self.headers.get("Host")) and hmac.compare_digest(
+            return host_ok(self.headers.get("Host"), ip, args.port) and hmac.compare_digest(
                 self.headers.get("X-Crate-Key", ""), key)
 
         def do_GET(self):
             u = urllib.parse.urlparse(self.path)
             if u.path == "/":
-                if not host_ok(self.headers.get("Host")):
+                if not host_ok(self.headers.get("Host"), ip, args.port):
                     return self._send(403, "{}")
                 return self._send(200, PAGE, "text/html")
             if u.path == "/api/find":
@@ -701,7 +716,7 @@ def cmd_undo(args):
         try:
             dc.remove(r["release_id"], r["folder"], r["instance_id"])
             print(f"  removed {r['input']}")
-        except RuntimeError as e:
+        except (RuntimeError, ValueError) as e:
             print(f"  FAILED {r['input']}: {e}")
 
 

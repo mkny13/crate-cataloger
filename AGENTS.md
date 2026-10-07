@@ -22,3 +22,12 @@ Mahler conducts coding agents through this repo's GitHub-issue backlog.
 - Once the branch is pushed and verified, run `mahler ship crate-cataloger#N`. The conductor opens the PR, reviews it, watches CI and merges on green. Do not leave a PR open.
 - To abandon work, run `mahler release crate-cataloger#N`.
 - Autonomous runs end their final message with a `STATUS:` line (`DONE`, `NEEDS-YOU`, `BLOCKED` or `YIELDED`).
+
+## Branch protection
+
+The default branch `main` is protected:
+- Required status check: `test` (defined in `.github/workflows/ci.yml`).
+- Squash merging is enabled for pull requests.
+- Pull request reviews are not required (`required_pull_request_reviews: null`) so automated Mahler conductor merges remain unblocked per D18.
+
+Branch protection settings can be applied or checked using `scripts/apply-branch-protection.sh` (supports `--dry-run`).

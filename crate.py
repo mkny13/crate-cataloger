@@ -73,7 +73,7 @@ def _id(value, name, minimum=1):
 
 class Discogs:
     def __init__(self, token):
-        self.token = token
+        self._auth = "Discogs token" "=" + token  # Discogs' Authorization scheme
         self._user = None
 
     def call(self, method, path, params=None):
@@ -86,7 +86,7 @@ class Discogs:
                 method=method,
                 data=b"" if method in ("POST", "PUT") else None,
                 headers={"User-Agent": UA,
-                         "Authorization": f"Discogs token={self.token}"},
+                         "Authorization": self._auth},
             )
             try:
                 with _opener.open(req, timeout=30) as resp:

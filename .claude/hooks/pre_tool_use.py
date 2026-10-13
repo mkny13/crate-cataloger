@@ -36,7 +36,10 @@ def main():
     if not run_id:
         # Nudge once per session if unclaimed
         session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", str(os.getpid()))
-        state_file = f"/tmp/mahler_nudge_{session_id}"
+        # Per-user 0700 dir, not a predictable world-writable /tmp path.
+        state_dir = os.path.expanduser("~/.mahler/nudge")
+        safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_")[:64] or "unknown"
+        state_file = os.path.join(state_dir, safe_id)
         if not os.path.exists(state_file):
             try:
                 out = subprocess.check_output(["mahler", "status", "--project", project, "--json"], text=True)
@@ -47,8 +50,9 @@ def main():
                                   for l in d.get("leases", []))
                 if not holds_claim:
                     print(f"If this work relates to a backlog item, run `mahler claim {project}#N`.")
-                    with open(state_file, "w") as f:
-                        f.write("1")
+                    os.makedirs(state_dir, mode=0o700, exist_ok=True)
+                    fd = os.open(state_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    os.close(fd)
             except Exception:
                 pass
 

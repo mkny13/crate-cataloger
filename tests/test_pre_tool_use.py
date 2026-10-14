@@ -202,6 +202,22 @@ class TestPreToolUseHook(unittest.TestCase):
             res.stdout,
         )
 
+    def test_yield_dangling_symlink_triggers_yield(self):
+        """8. A dangling symlink at the yield file triggers yield (lexists vs exists semantics)."""
+        runs_dir = self.test_dir / "runs"
+        run_id = "run-dangling"
+        yield_file = runs_dir / run_id / "yield"
+        yield_file.parent.mkdir(parents=True, exist_ok=True)
+        # os.path.exists() would return False for this; os.path.lexists() returns True.
+        yield_file.symlink_to(runs_dir / run_id / "missing-target")
+
+        res = self.run_hook({
+            "MAHLER_RUN_ID": run_id,
+            "MAHLER_RUNS_DIR": str(runs_dir),
+        })
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("yield delivered", res.stdout)
+
     def test_default_nudge_dir_fallback_to_home(self):
         """Fallback to ~/.mahler/nudge when MAHLER_NUDGE_DIR is unset."""
         fake_home = self.test_dir / "home"
@@ -218,6 +234,16 @@ class TestPreToolUseHook(unittest.TestCase):
         fallback_marker = fake_home / ".mahler" / "nudge" / session_id
         self.assertTrue(fallback_marker.is_file())
         self.assertEqual(stat.S_IMODE(fallback_marker.stat().st_mode), 0o600)
+
+    def test_yield_check_uses_lexists(self):
+        """7. Static check: the autonomous yield-file existence check uses os.path.lexists."""
+        source = HOOK_SCRIPT.read_text(encoding="utf-8")
+        # The yield check must use lexists (symlink-safe), matching the nudge path.
+        self.assertIn("os.path.lexists(yield_file)", source)
+        # The old exists()-based yield check must not be present.
+        self.assertNotIn("os.path.exists(yield_file)", source)
+        # Consistency: both yield and nudge state-file checks use lexists.
+        self.assertGreaterEqual(source.count("os.path.lexists("), 2)
 
 
 if __name__ == "__main__":

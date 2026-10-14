@@ -5,7 +5,7 @@
     ],
     "PreToolUse": [
       {"matcher": "Edit|Write|Bash", "hooks": [{"type": "command", "command": "python3 .claude/hooks/pre_tool_use.py"}]},
-      {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "python3 .claude/hooks/block_generated_csvs.py"}]}
+      {"matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash", "hooks": [{"type": "command", "command": "python3 .claude/hooks/block_generated_csvs.py"}]}
     ],
     "PostToolUse": [
       {"hooks": [{"type": "command", "command": "python3 .claude/hooks/heartbeat.py"}]}

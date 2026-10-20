@@ -134,38 +134,33 @@ class Discogs:
             raise RuntimeError(f"Master {master_id} not found or has no main release")
         return m["main_release"]
 
-    def collection_index(self):
-        """Sets of release ids and master ids already in the collection."""
-        releases, masters, page = set(), set(), 1
+    def _collection_releases(self):
+        """Yield every collection instance from the user's All folder."""
+        page = 1
         while True:
             res = self.call("GET", f"/users/{self.username}/collection/folders/0/releases",
                             {"per_page": 100, "page": page})
             if not res:
                 break
-            for item in res.get("releases", []):
-                bi = item.get("basic_information", {})
-                releases.add(item.get("id") or bi.get("id"))
-                if bi.get("master_id"):
-                    masters.add(bi["master_id"])
+            yield from res.get("releases", [])
             pages = res.get("pagination", {}).get("pages", 1)
             if page >= pages:
                 break
             page += 1
+
+    def collection_index(self):
+        """Sets of release ids and master ids already in the collection."""
+        releases, masters = set(), set()
+        for item in self._collection_releases():
+            bi = item.get("basic_information", {})
+            releases.add(item.get("id") or bi.get("id"))
+            if bi.get("master_id"):
+                masters.add(bi["master_id"])
         return releases, masters
 
     def collection_items(self):
         """Every collection instance (a release owned twice appears twice)."""
-        items, page = [], 1
-        while True:
-            res = self.call("GET", f"/users/{self.username}/collection/folders/0/releases",
-                            {"per_page": 100, "page": page})
-            if not res:
-                break
-            items += res.get("releases", [])
-            if page >= res.get("pagination", {}).get("pages", 1):
-                break
-            page += 1
-        return items
+        return list(self._collection_releases())
 
     def add(self, release_id, folder):
         release_id, folder = _id(release_id, "release_id"), _id(folder, "folder", minimum=1)
@@ -233,6 +228,17 @@ def find_hinted(dc, base, hints):
     return cands[:N_CANDIDATES]
 
 
+def _dedupe(cands):
+    """Keep the first candidate for each master or release reference."""
+    seen, out = set(), []
+    for c in cands:
+        key = c["master_id"] or c["ref"]
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
+
+
 def find(dc, line):
     """Return up to N_CANDIDATES candidates, best first.
     Each candidate: {"ref": "m123"|"r456", "title", "year", "score", "master_id", "release_id"}
@@ -251,8 +257,7 @@ def find(dc, line):
         fcands = _search(dc, fixed)
         for c in fcands:
             c["fixed"] = fixed
-        seen = {c["master_id"] or c["ref"] for c in fcands}
-        cands = fcands + [c for c in cands if (c["master_id"] or c["ref"]) not in seen]
+        cands = _dedupe(fcands + cands)
     return cands[:N_CANDIDATES]
 
 
@@ -278,7 +283,6 @@ def _search(dc, line):
             attempts.append((kind, {"artist": artist, "release_title": title}))
         attempts.append((kind, {"q": line.replace(" - ", " ")}))
 
-    results, kind = [], None
     for kind, params in attempts:
         results = dc.search(kind, **params)
         if results:
@@ -306,14 +310,7 @@ def _search(dc, line):
         })
     cands.sort(key=lambda c: c["sort"], reverse=True)
     # De-dupe releases that share a master (keeps the best-ranked one)
-    seen, out = set(), []
-    for c in cands:
-        key = c["master_id"] or c["ref"]
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(c)
-    return out[:N_CANDIDATES]
+    return _dedupe(cands)[:N_CANDIDATES]
 
 
 def is_confident(cands):

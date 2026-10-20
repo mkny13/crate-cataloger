@@ -94,15 +94,18 @@ class Discogs:
                     body = resp.read()
                     return json.loads(body) if body else {}
             except urllib.error.HTTPError as e:
-                if e.code == 429:
-                    time.sleep(15 * (attempt + 1))
-                    continue
-                if e.code == 404:
-                    return None
-                detail = e.read()[:300].decode("utf-8", "replace")
-                if e.code == 401:
-                    sys.exit("Discogs rejected the token (401). Run: python3 crate.py setup")
-                raise RuntimeError(f"{method} {path} -> HTTP {e.code}: {detail}")
+                try:
+                    if e.code == 429:
+                        time.sleep(15 * (attempt + 1))
+                        continue
+                    if e.code == 404:
+                        return None
+                    detail = e.read()[:300].decode("utf-8", "replace")
+                    if e.code == 401:
+                        sys.exit("Discogs rejected the token (401). Run: python3 crate.py setup")
+                    raise RuntimeError(f"{method} {path} -> HTTP {e.code}: {detail}")
+                finally:
+                    e.close()
             except urllib.error.URLError as e:
                 if attempt < 2:
                     time.sleep(3)
@@ -523,11 +526,9 @@ async function add(ref,shown){
 
 def lan_ip():
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("10.255.255.255", 1))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            return s.getsockname()[0]
     except OSError:
         return "127.0.0.1"
 
@@ -627,7 +628,8 @@ def cmd_serve(args):
     print(f"Open on your phone (same Wi-Fi): http://{ip}:{args.port}/#k={key}   (Ctrl-C to stop)")
     print("The link contains a one-time key; anyone without it is refused.")
     try:
-        ThreadingHTTPServer((args.host, args.port), H).serve_forever()
+        with ThreadingHTTPServer((args.host, args.port), H) as srv:
+            srv.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
@@ -763,7 +765,7 @@ def cmd_dupes(_args):
     items = dc.collection_items()
     dupes = _dupe_groups(items)
     out = Path(f"dupes-{datetime.now():%Y%m%d-%H%M%S}.csv")
-    with out.open("w", newline="") as f:
+    with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["artist", "title", "copies", "same_release", "release_id", "instance_id",
                     "folder_id", "year", "label", "format", "url"])

@@ -403,6 +403,29 @@ def client():
     return Discogs(tok)
 
 
+def _quick_pick(dc, choice, cands, coll):
+    """Turn a typed pick into (release_id, master_id, shown), or None to skip.
+
+    Prints the skip messages and asks the second-copy question itself.
+    May raise RuntimeError/ValueError from resolve()/main_release().
+    """
+    if choice == "s":
+        print("  skipped\n")
+        return None
+    if choice in ("", "1", "2", "3", "4"):
+        idx = int(choice or 1) - 1
+        if idx >= len(cands):
+            print("  no such option, skipped\n")
+            return None
+        chosen = cands[idx]
+        if owned(chosen, coll) and input("  Already owned. Add a second copy? [y/N] ").strip().lower() != "y":
+            print("  skipped\n")
+            return None
+        rid = chosen["release_id"] or dc.main_release(chosen["master_id"])
+        return rid, chosen["master_id"], label(chosen)
+    return resolve(dc, choice), None, choice
+
+
 def cmd_quick(args):
     dc = client()
     print(f"Discogs user: {dc.username}. Loading your collection for duplicate checks...")
@@ -427,29 +450,16 @@ def cmd_quick(args):
                 flag = "  [ALREADY OWNED]" if owned(c, coll) else ""
                 print(f"  {i}. {label(c)}{flag}")
             choice = input("  pick [1]: ").strip().lower()
-            if choice == "s":
-                print("  skipped\n")
-                continue
             try:
-                if choice in ("", "1", "2", "3", "4"):
-                    idx = int(choice or 1) - 1
-                    if idx >= len(cands):
-                        print("  no such option, skipped\n")
-                        continue
-                    chosen = cands[idx]
-                    if owned(chosen, coll) and input("  Already owned. Add a second copy? [y/N] ").strip().lower() != "y":
-                        print("  skipped\n")
-                        continue
-                    rid = chosen["release_id"] or dc.main_release(chosen["master_id"])
-                    shown = label(chosen)
-                else:
-                    rid = resolve(dc, choice)
-                    shown = choice
+                picked = _quick_pick(dc, choice, cands, coll)
+                if picked is None:
+                    continue
+                rid, master_id, shown = picked
                 inst = dc.add(rid, args.folder)
                 log.write(rid, inst, line)
                 coll[0].add(rid)
-                if choice in ("", "1", "2", "3", "4") and chosen["master_id"]:
-                    coll[1].add(chosen["master_id"])
+                if master_id:
+                    coll[1].add(master_id)
                 print(f"  added: {shown}\n")
             except (RuntimeError, ValueError) as e:
                 print(f"  error: {e}\n")
@@ -721,10 +731,8 @@ def cmd_undo(args):
             print(f"  FAILED {r['input']}: {e}")
 
 
-def cmd_dupes(_args):
-    dc = client()
-    print(f"Discogs user: {dc.username}. Loading collection...")
-    items = dc.collection_items()
+def _dupe_groups(items):
+    """Group collection items by master (else release id); keep groups with >1, sorted by artist, title."""
     groups = {}
     for it in items:
         bi = it.get("basic_information", {})
@@ -733,6 +741,27 @@ def cmd_dupes(_args):
     dupes = [g for g in groups.values() if len(g) > 1]
     dupes.sort(key=lambda g: (g[0]["basic_information"]["artists"][0]["name"].lower(),
                               g[0]["basic_information"]["title"].lower()))
+    return dupes
+
+
+def _dupe_row(it, group):
+    """The 11-column dupes CSV row for one item of a duplicate group."""
+    rids = {x["id"] for x in group}
+    bi = it["basic_information"]
+    print_artist = ", ".join(a["name"] for a in bi["artists"])
+    fmt = " ".join(filter(None, [bi["formats"][0]["name"] if bi.get("formats") else "",
+                                 ", ".join(bi["formats"][0].get("descriptions", [])) if bi.get("formats") else ""]))
+    return [csv_safe(print_artist), csv_safe(bi["title"]), len(group),
+            "yes" if len(rids) == 1 else "no", it["id"], it.get("instance_id"), it.get("folder_id"), bi.get("year"),
+            csv_safe("; ".join(l["name"] for l in bi.get("labels", []))), csv_safe(fmt),
+            f"https://www.discogs.com/release/{it['id']}"]
+
+
+def cmd_dupes(_args):
+    dc = client()
+    print(f"Discogs user: {dc.username}. Loading collection...")
+    items = dc.collection_items()
+    dupes = _dupe_groups(items)
     out = Path(f"dupes-{datetime.now():%Y%m%d-%H%M%S}.csv")
     with out.open("w", newline="") as f:
         w = csv.writer(f)
@@ -741,14 +770,7 @@ def cmd_dupes(_args):
         for g in dupes:
             rids = {it["id"] for it in g}
             for it in g:
-                bi = it["basic_information"]
-                print_artist = ", ".join(a["name"] for a in bi["artists"])
-                fmt = " ".join(filter(None, [bi["formats"][0]["name"] if bi.get("formats") else "",
-                                             ", ".join(bi["formats"][0].get("descriptions", [])) if bi.get("formats") else ""]))
-                w.writerow([csv_safe(print_artist), csv_safe(bi["title"]), len(g),
-                            "yes" if len(rids) == 1 else "no", it["id"], it.get("instance_id"), it.get("folder_id"), bi.get("year"),
-                            csv_safe("; ".join(l["name"] for l in bi.get("labels", []))), csv_safe(fmt),
-                            f"https://www.discogs.com/release/{it['id']}"])
+                w.writerow(_dupe_row(it, g))
             first = g[0]["basic_information"]
             kind = "same release x%d" % len(g) if len(rids) == 1 else "%d different pressings" % len(g)
             print(f"  {', '.join(a['name'] for a in first['artists'])} - {first['title']}  ({kind})")

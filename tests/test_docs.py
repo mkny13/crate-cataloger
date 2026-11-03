@@ -1,11 +1,12 @@
 """Doc- and spec-drift tests for crate-cataloger.
 
-Covers the checks (a)-(d) of issue #41:
+Covers the checks (a)-(e) of issues #41 and #44:
 (a) no `crate.py:<nnn>` line references remain in SECURITY.md,
 (b) the crate.py module-level names referenced in SECURITY.md exist as
     attributes of the crate module,
 (c) argparse subcommands appear in both the crate.py docstring and README.md,
-(d) every serve/add long option appears in README.md.
+(d) every serve/add long option appears in README.md,
+(e) docs/drift-audit.md accurately records 26 replaced line refs.
 """
 
 import re
@@ -87,6 +88,12 @@ class TestDocsDrift(unittest.TestCase):
             self.assertIn(
                 opt, README_MD, f"{opt!r} missing from README.md"
             )
+
+    # (e) docs/drift-audit.md accurately records 26 replaced line refs
+    def test_drift_audit_row_1_ref_count(self):
+        drift = (BASE / "docs" / "drift-audit.md").read_text(encoding="utf-8")
+        self.assertIn("All 26 stale refs replaced", drift)
+        self.assertNotIn("All 23 stale refs replaced", drift)
 
 
 if __name__ == "__main__":

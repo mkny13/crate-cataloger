@@ -79,8 +79,27 @@ class TestDocsDrift(unittest.TestCase):
         expected = ["add", "dupes", "match", "quick", "serve", "setup", "undo"]
         self.assertEqual(subcommands, expected)
         for sub in subcommands:
-            self.assertIn(sub, DOCSTRING, f"{sub!r} missing from crate.py docstring")
-            self.assertIn(sub, README_MD, f"{sub!r} missing from README.md")
+            # Match a documented invocation, not a bare substring: short
+            # names such as `add`, `match` and `undo` also occur in ordinary
+            # prose (e.g. "add every row", "Undo button"), so deleting a
+            # subcommand's documentation line must no longer pass.
+            # README: a `crate.py <sub>` invocation (args may follow).
+            # Docstring: an indented `Commands` list entry (`^  <sub>`)
+            # or a `crate.py <sub>` mention; \b keeps short names from
+            # matching inside unrelated words.
+            readme_re = re.compile(r"crate\.py\s+" + re.escape(sub) + r"\b")
+            docstring_re = re.compile(
+                r"(?m)^  " + re.escape(sub) + r"\b|crate\.py\s+" + re.escape(sub) + r"\b"
+            )
+            self.assertTrue(
+                readme_re.search(README_MD),
+                f"{sub!r} missing from README.md (expected `crate.py {sub}`)",
+            )
+            self.assertTrue(
+                docstring_re.search(DOCSTRING),
+                f"{sub!r} missing from crate.py docstring "
+                f"(expected a `  {sub}` Commands entry or `crate.py {sub}`)",
+            )
 
     # (d) serve/add long options must appear in README.
     def test_long_options_in_readme(self):

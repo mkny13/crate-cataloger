@@ -776,7 +776,7 @@ def cmd_dupes(_args):
     print(f"\n{len(items)} items, {len(dupes)} duplicated albums. Details: {out}")
 
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("setup").set_defaults(fn=cmd_setup)
@@ -791,7 +791,11 @@ def main():
     sv.set_defaults(fn=cmd_serve)
     sub.add_parser("dupes").set_defaults(fn=cmd_dupes)
     u = sub.add_parser("undo"); u.add_argument("log"); u.set_defaults(fn=cmd_undo)
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    args = build_parser().parse_args()
     try:
         args.fn(args)
     except KeyboardInterrupt:

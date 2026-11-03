@@ -41,11 +41,11 @@ Owned records are marked. The printed link ends in `#k=<key>`, a random key made
 refuses requests without it, so open the full link (the key is never sent in the URL path or logged).
 It still speaks plain HTTP, so only run it on a network you trust. Use `--host 127.0.0.1` to serve this computer only.
 Tick "Show covers" for thumbnails (off by default; remembered per browser). Each added record appears in a list with an **Undo** button that removes it from your collection.
-The log (`added-<timestamp>.csv`) is written when you stop it with Ctrl-C.
+The `serve` log (`added-<timestamp>.csv`) is written when you stop it with Ctrl-C.
 
 **Duplicates:** `python3 crate.py dupes` lists albums you own more than once and writes `dupes-<timestamp>.csv`.
 
-**Undo:** every add run writes `added-<timestamp>.csv`. Run `python3 crate.py undo added-....csv` to remove those items.
+**Undo:** every `quick`, `add`, and `serve` run writes `added-<timestamp>.csv`. Run `python3 crate.py undo added-....csv` to remove those items.
 
 ## Narrowing with details
 
@@ -67,7 +67,9 @@ Note: this sends the text you typed to Apple's public search API.
 
 ## Notes
 
-- New items go to the Uncategorized folder. Use `--folder N` on `quick`/`add` to change that.
+- New items go to the Uncategorized folder. Use `--folder N` on `quick`, `add`, or `serve` to change that.
+- `add -y/--yes` skips the y/N prompt.
+- `serve --port N` (default 8765) and `serve --folder N` select the TCP port and the Discogs folder.
 - Discogs allows 60 API calls/minute. The script slows itself down. Expect about 20–30 records/minute in batch mode.
 - Android: install Termux (from F-Droid), `pkg install python`, copy `crate.py` over, same commands.
 - Tips for matching: `Artist - Title` beats a bare title. For "Various Artists" comps, use `Various - Title`.

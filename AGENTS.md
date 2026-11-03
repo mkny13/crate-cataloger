@@ -2,13 +2,12 @@
 
 ## Verify
 
-Run before every push (PR CI runs the same command):
+Before every push, run the same two commands as PR CI:
 
 ```sh
 python3 -m py_compile crate.py
+python3 -m unittest discover -s tests
 ```
-
-Tests: `python3 -m unittest discover -s tests`
 
 ## Working with Mahler
 

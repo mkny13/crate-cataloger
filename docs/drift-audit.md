@@ -8,7 +8,7 @@ the `crate.py` module docstring — against the code in `crate.py`. `DESIGN.md`,
 
 | # | Drift item | Verdict | Reason |
 |---|-----------|---------|--------|
-| 1 | `SECURITY.md` stale `crate.py:NNN` line refs → symbol references | **fixed** | All 23 stale refs replaced with the pointed-to symbol (e.g. `host_ok` now `crate.py:533`, `spell_fix` now `crate.py:267`, `resolve` now `crate.py:342`, `csv_safe` now `crate.py:325`, `cmd_undo` now `crate.py:716`, `AddLog` now `crate.py:359`); verified by `tests/test_docs.py` |
+| 1 | `SECURITY.md` stale `crate.py:NNN` line refs → symbol references | **fixed** | All 26 stale refs replaced with the pointed-to symbol (e.g. `host_ok` now `crate.py:533`, `spell_fix` now `crate.py:267`, `resolve` now `crate.py:342`, `csv_safe` now `crate.py:325`, `cmd_undo` now `crate.py:716`, `AddLog` now `crate.py:359`); verified by `tests/test_docs.py` |
 | 2 | README missing long flags (`add -y/--yes`, `serve --port`, `serve --folder`; Notes `--folder` scope limited to `quick`/`add`) | **fixed** | Documented `--yes` for `add`, `--port` (default 8765) and `--folder` for `serve`, and widened `--folder` to `quick`/`add`/`serve` |
 | 3 | `AGENTS.md` "Verify" matched only `py_compile`; CI also runs `unittest discover -s tests` | **fixed** | Verify section now lists both commands, matching `.github/workflows/ci.yml` |
 | 4 | README Undo line claimed only `add` writes `added-<timestamp>.csv` | **fixed** | Undo line now names `quick`, `add` and `serve` as log writers; serve log wording corrected |

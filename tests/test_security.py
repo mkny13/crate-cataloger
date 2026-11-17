@@ -101,10 +101,6 @@ class SetupPerms(unittest.TestCase):
             self.assertEqual(tf.read_text(), "faketoken")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -159,3 +155,7 @@ class OutboundHosts(unittest.TestCase):
             self.assertIn(urlparse(b).hostname, allowed, b)
         # every urlopen/Request in crate.py goes through API or the iTunes literal
         self.assertEqual(len(re.findall(r"urlopen\(", src)) >= 1, True)
+
+
+if __name__ == "__main__":
+    unittest.main()

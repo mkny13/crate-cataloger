@@ -142,19 +142,124 @@ class AgentDenyList(unittest.TestCase):
         self.assertIn("hooks", cfg)
 
 
+ALLOWED_HOSTS = {"api.discogs.com", "itunes.apple.com"}
+# Reviewed URL literals in crate.py that are never request targets (UA string, setup hint,
+# CSP header, LAN-server hint, release link in CSV). Anything else must be an allowed host.
+NON_REQUEST_URLS = {
+    "https://github.com/mkny13/crate-cataloger",
+    "https://www.discogs.com/settings/developers",
+    "https://*.discogs.com",
+    "http://",
+    "https://www.discogs.com/release/",
+}
+# Every outbound call site in crate.py: (enclosing function, callee). Adding one must be
+# reviewed here under the same allow-list discipline.
+EXPECTED_CALL_SITES = [
+    ("Discogs.call", "Request", "url"),
+    ("Discogs.call", "_opener.open", "req"),
+    ("spell_fix", "urlopen", "url"),
+]
+
+
+def _outbound_problems(src):
+    """Static check of crate.py source; returns a list of problems (empty when compliant)."""
+    import ast
+    import re
+    from urllib.parse import urlparse
+    tree = ast.parse(src)
+    problems = []
+
+    # (1) every http(s) literal is an allowed host or a reviewed non-request literal
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for u in re.findall(r"https?://[^\s\"'{}();]*", node.value):
+                host = urlparse(u).hostname
+                if host not in ALLOWED_HOSTS and u not in NON_REQUEST_URLS:
+                    problems.append(f"non-allowlisted URL literal: {u}")
+
+    # (2) enumerate outbound call sites with their enclosing function
+    def callee(func):
+        if isinstance(func, ast.Name) and func.id in ("urlopen", "Request"):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            if func.attr in ("urlopen", "Request"):
+                return func.attr
+            if func.attr == "open" and isinstance(func.value, ast.Name) and "opener" in func.value.id:
+                return f"{func.value.id}.open"
+        return None
+
+    sites, url_assigns = [], {}
+
+    def visit(node, scope):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                visit(child, scope + [child.name])
+                continue
+            name = ".".join(scope)
+            if isinstance(child, ast.Call) and (c := callee(child.func)):
+                first = child.args[0] if child.args else None
+                arg = first.id if isinstance(first, ast.Name) else ast.dump(first) if first else None
+                sites.append((name, c, arg))
+            if isinstance(child, (ast.Assign, ast.AugAssign)):
+                targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                if any(isinstance(t, ast.Name) and t.id == "url" for t in targets):
+                    url_assigns.setdefault(name, []).append(child)
+            visit(child, scope)
+
+    visit(tree, [])
+    if sorted(sites) != sorted(EXPECTED_CALL_SITES):
+        problems.append(f"outbound call sites changed: {sorted(sites)} != {sorted(EXPECTED_CALL_SITES)}")
+
+    # (3) in each function issuing a request, `url` is built only from API or an allowed literal
+    def base_ok(expr):
+        while isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Add):
+            expr = expr.left
+        if isinstance(expr, ast.Name):
+            return expr.id == "API"
+        if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+            return urlparse(expr.value).hostname in ALLOWED_HOSTS
+        return False
+
+    for fn in {s[0] for s in sites if s[2] == "url"}:
+        assigns = url_assigns.get(fn, [])
+        if not any(isinstance(a, ast.Assign) for a in assigns):
+            problems.append(f"{fn}: no `url = <allowlisted base> + ...` assignment")
+        for a in assigns:
+            if isinstance(a, ast.Assign) and not base_ok(a.value):
+                problems.append(f"{fn}: url assigned from non-allowlisted base (line {a.lineno})")
+            if isinstance(a, ast.AugAssign) and isinstance(a.value, ast.Constant) \
+                    and "://" in str(a.value.value):
+                problems.append(f"{fn}: url += absolute URL (line {a.lineno})")
+    return problems
+
+
 class OutboundHosts(unittest.TestCase):
+    def setUp(self):
+        self.src = (ROOT / "crate.py").read_text(encoding="utf-8")
+
     def test_request_bases_are_allowlisted(self):
-        import re
         from urllib.parse import urlparse
-        src = (ROOT / "crate.py").read_text(encoding="utf-8")
-        bases = [crate.API]
-        bases += re.findall(r'"(https://itunes[^"]*)"', src)
-        self.assertGreaterEqual(len(bases), 2)
-        allowed = {"api.discogs.com", "itunes.apple.com"}
-        for b in bases:
-            self.assertIn(urlparse(b).hostname, allowed, b)
-        # every urlopen/Request in crate.py goes through API or the iTunes literal
-        self.assertEqual(len(re.findall(r"urlopen\(", src)) >= 1, True)
+        self.assertEqual(urlparse(crate.API).hostname, "api.discogs.com")
+        self.assertEqual(_outbound_problems(self.src), [])
+
+    def _assert_caught(self, src):
+        self.assertTrue(_outbound_problems(src), "mutation was not caught")
+
+    def test_rejects_inline_disallowed_urlopen(self):
+        self._assert_caught(self.src + '\n\ndef leak():\n    urllib.request.urlopen("https://other.example/x")\n')
+
+    def test_rejects_inline_disallowed_request(self):
+        self._assert_caught(self.src.replace("urllib.request.Request(\n                url,",
+                                             'urllib.request.Request(\n                "https://other.example/",', 1))
+
+    def test_rejects_extra_call_site_with_url_var(self):
+        self._assert_caught(self.src + "\n\ndef extra(url):\n    urllib.request.urlopen(url)\n")
+
+    def test_rejects_url_from_other_variable(self):
+        self._assert_caught(self.src.replace("url = API + path", "url = OTHER + path", 1))
+
+    def test_rejects_removed_call_site(self):
+        self._assert_caught(self.src.replace("urllib.request.urlopen(url, timeout=8)", "open(url)", 1))
 
 
 if __name__ == "__main__":

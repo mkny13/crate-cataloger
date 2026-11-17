@@ -38,7 +38,7 @@ NON_CRATE_NAMES = {
     "Authorization", "DISCOGS_TOKEN", "urlopen", "nosniff", "CSP",
     "innerHTML", "textContent", "serve", "_authed", "chmod", "token", "undo",
     "CsvSafe", "HostOk", "IdValidation", "NoRedirect", "Resolve",
-    "SetupPerms", "ValueError", "NoShell", "CiPermissions", "AgentDenyList", "OutboundHosts", "folder", "instance_id", "release_id",
+    "SetupPerms", "ValueError", "CLAUDE_CODE_SESSION_ID", "GITHUB_TOKEN", "pull_request", "pull_request_target", "mahler", "project", "number", "my_id", "NoShell", "CiPermissions", "AgentDenyList", "OutboundHosts", "folder", "instance_id", "release_id",
 }
 
 

@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "deny": ["Read(~/.config/crate-to-discogs/**)", "Read(./.env)"]
+  },
   "hooks": {
     "SessionStart": [
       {"hooks": [{"type": "command", "command": "python3 .claude/hooks/session_start.py"}]}

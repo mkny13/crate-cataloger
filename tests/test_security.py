@@ -103,3 +103,59 @@ class SetupPerms(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class NoShell(unittest.TestCase):
+    def test_crate_py_spawns_nothing(self):
+        src = (ROOT / "crate.py").read_text(encoding="utf-8")
+        for pat in ("subprocess", "os.system", "os.popen", "eval(", "exec("):
+            self.assertNotIn(pat, src, pat)
+
+    def test_hooks_have_no_shell(self):
+        hooks = sorted((ROOT / ".claude" / "hooks").glob("*.py"))
+        self.assertTrue(hooks)
+        for p in hooks:
+            src = p.read_text(encoding="utf-8")
+            for pat in ("shell=True", "os.system", "os.popen"):
+                self.assertNotIn(pat, src, f"{p.name}: {pat}")
+
+
+class CiPermissions(unittest.TestCase):
+    def setUp(self):
+        import re
+        self.re = re
+        self.text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    def test_top_level_contents_read(self):
+        self.assertTrue(self.re.search(r"(?m)^permissions:\s*\n[ \t]+contents:[ \t]*read[ \t]*$", self.text))
+
+    def test_no_pull_request_target(self):
+        self.assertNotIn("pull_request_target", self.text)
+
+
+class AgentDenyList(unittest.TestCase):
+    def test_deny_entries(self):
+        import json
+        cfg = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        deny = cfg.get("permissions", {}).get("deny", [])
+        for entry in ("Read(~/.config/crate-to-discogs/**)", "Read(./.env)"):
+            self.assertIn(entry, deny)
+        self.assertIn("hooks", cfg)
+
+
+class OutboundHosts(unittest.TestCase):
+    def test_request_bases_are_allowlisted(self):
+        import re
+        from urllib.parse import urlparse
+        src = (ROOT / "crate.py").read_text(encoding="utf-8")
+        bases = [crate.API]
+        bases += re.findall(r'"(https://itunes[^"]*)"', src)
+        self.assertGreaterEqual(len(bases), 2)
+        allowed = {"api.discogs.com", "itunes.apple.com"}
+        for b in bases:
+            self.assertIn(urlparse(b).hostname, allowed, b)
+        # every urlopen/Request in crate.py goes through API or the iTunes literal
+        self.assertEqual(len(re.findall(r"urlopen\(", src)) >= 1, True)
